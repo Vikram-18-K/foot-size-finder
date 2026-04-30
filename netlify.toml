@@ -1,0 +1,19 @@
+# Netlify configuration for Foot Size Finder Frontend
+
+[build]
+  publish = "."   # serve from root (index.html is at root)
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    # Allow camera access over HTTPS
+    Permissions-Policy = "camera=*"
+    # Required for cross-origin requests to the backend
+    Access-Control-Allow-Origin = "*"
+    # Fix Firebase Auth popup COOP issue
+    Cross-Origin-Opener-Policy = "same-origin-allow-popups"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

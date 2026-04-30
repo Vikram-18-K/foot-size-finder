@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Foot Size Finder — AI-Powered Measurement</title>
+    <meta name="description" content="AI-powered foot scanning and shoe size measurement platform.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="styles.css">
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+    <script src="firebase-init.js"></script>
+</head>
+<body>
+
+<!-- ===================== LOGIN PAGE ===================== -->
+<div id="loginPage" class="page">
+    <canvas id="loginCanvas" class="login-canvas"></canvas>
+
+    <!-- Left branding panel -->
+    <div class="login-left">
+        <div class="brand-block">
+            <div class="brand-icon">
+                <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#29C5F6" stroke-width="1.5">
+                    <path d="M3 7c0 0 2-2 9-2s9 2 9 2v9c0 3-4 5-9 5s-9-2-9-5V7z"/>
+                    <path d="M3 7c0 3 4 5 9 5s9-2 9-5"/>
+                </svg>
+            </div>
+            <h1 class="brand-name">Foot Size Finder</h1>
+            <p class="brand-tagline">AI-powered precision foot measurement.<br>Know your size before you buy.</p>
+            <div class="brand-features">
+                <div class="feat-item"><span class="feat-dot"></span>Camera-based scanning</div>
+                <div class="feat-item"><span class="feat-dot"></span>A4 paper calibration</div>
+                <div class="feat-item"><span class="feat-dot"></span>IND / US / UK / EU sizes</div>
+                <div class="feat-item"><span class="feat-dot"></span>Scan history with timestamps</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right auth panel -->
+    <div class="login-right">
+        <div class="auth-card">
+            <div class="auth-header">
+                <h2 class="auth-title">Welcome back</h2>
+                <p class="auth-sub">Sign in to your account</p>
+            </div>
+
+            <div class="auth-tabs">
+                <button class="auth-tab active" id="tabSignIn">Sign In</button>
+                <button class="auth-tab" id="tabSignUp">Create Account</button>
+            </div>
+
+            <!-- Sign In Panel -->
+            <div class="auth-panel" id="panelSignIn">
+                <button class="google-btn" id="googleSignInBtn">
+                    <svg width="18" height="18" viewBox="0 0 48 48">
+                        <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                        <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                        <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                        <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                    </svg>
+                    Continue with Google
+                </button>
+                <div class="auth-divider"><span>or</span></div>
+                <form id="signInForm">
+                    <input type="email" id="signInEmail" class="auth-input" placeholder="Email address" required>
+                    <input type="password" id="signInPassword" class="auth-input" placeholder="Password" required>
+                    <button type="submit" class="auth-submit" id="signInBtn">SIGN IN</button>
+                </form>
+            </div>
+
+            <!-- Create Account Panel -->
+            <div class="auth-panel hidden" id="panelSignUp">
+                <button class="google-btn" id="googleSignUpBtn">
+                    <svg width="18" height="18" viewBox="0 0 48 48">
+                        <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                        <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                        <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                        <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                    </svg>
+                    Sign up with Google
+                </button>
+                <div class="auth-divider"><span>or</span></div>
+                <form id="signUpForm">
+                    <input type="text" id="signUpName" class="auth-input" placeholder="Full Name" required>
+                    <input type="email" id="signUpEmail" class="auth-input" placeholder="Email address" required>
+                    <input type="password" id="signUpPassword" class="auth-input" placeholder="Password (min 6 chars)" minlength="6" required>
+                    <button type="submit" class="auth-submit" id="signUpBtn">CREATE ACCOUNT</button>
+                </form>
+            </div>
+
+            <div class="auth-error" id="authError"></div>
+        </div>
+    </div>
+</div>
+
+<!-- ===================== MAIN APP ===================== -->
+<div id="mainApp" class="page hidden">
+    <input type="file" id="photoUpload" accept="image/*" style="display:none;">
+
+    <!-- Sidebar Overlay for Mobile -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+    
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-logo">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#29C5F6" stroke-width="1.5">
+                <path d="M3 7c0 0 2-2 9-2s9 2 9 2v9c0 3-4 5-9 5s-9-2-9-5V7z"/>
+                <path d="M3 7c0 3 4 5 9 5s9-2 9-5"/>
+            </svg>
+            <span>FootScan AI</span>
+            <button class="mobile-close-btn" id="closeSidebarBtn">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+        </div>
+
+        <nav class="sidebar-nav">
+            <button class="nav-item active" data-section="dashboard" id="navDashboard">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                Dashboard
+            </button>
+            <button class="nav-item" data-section="scanner" id="navScanner">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                Scanner
+            </button>
+            <button class="nav-item" data-section="history" id="navHistory">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                Scan History
+            </button>
+        </nav>
+
+        <div class="sidebar-footer">
+            <div class="sidebar-user-avatar" id="sidebarAvatar">?</div>
+            <div class="sidebar-user-info">
+                <div class="sidebar-user-name" id="sidebarUserName">—</div>
+                <button class="signout-btn" id="signOutBtn">Sign out</button>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main content area -->
+    <div class="main-content">
+        <!-- Top bar -->
+        <header class="topbar">
+            <div class="topbar-left">
+                <button class="mobile-menu-btn" id="mobileMenuBtn">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+                </button>
+                <h2 class="topbar-title" id="topbarTitle">Dashboard</h2>
+            </div>
+            <div class="topbar-right">
+                <div class="topbar-user">
+                    <div class="topbar-avatar" id="topbarAvatar">?</div>
+                    <span id="topbarName">—</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- ======= DASHBOARD ======= -->
+        <section class="content-section active" id="sectionDashboard">
+            <div class="dashboard-welcome">
+                <div>
+                    <h2 class="welcome-title" id="welcomeTitle">Welcome back!</h2>
+                    <p class="welcome-sub">Here's your foot measurement overview.</p>
+                </div>
+                <button class="cta-btn" id="dashScanBtn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                    Start New Scan
+                </button>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon cyan">📏</div>
+                    <div class="stat-info">
+                        <div class="stat-value" id="statTotal">0</div>
+                        <div class="stat-label">Total Scans</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon purple">🦶</div>
+                    <div class="stat-info">
+                        <div class="stat-value" id="statLastSize">—</div>
+                        <div class="stat-label">Last Size (IND/UK)</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon green">🗓️</div>
+                    <div class="stat-info">
+                        <div class="stat-value" id="statLastDate">—</div>
+                        <div class="stat-label">Last Scan Date</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="recent-section">
+                <div class="recent-header">
+                    <h3>Recent Scans</h3>
+                    <button class="view-all-btn" id="viewAllBtn">View all →</button>
+                </div>
+                <div class="recent-cards" id="recentCards">
+                    <div class="empty-state">
+                        <div class="empty-icon">📷</div>
+                        <p>No scans yet. Start scanning to see results here.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ======= SCANNER ======= -->
+        <section class="content-section" id="sectionScanner">
+            <div class="scanner-layout">
+                <!-- Camera panel -->
+                <div class="camera-panel">
+                    <div class="camera-feed-wrapper" id="viewfinder">
+                        <video id="cameraFeed" autoplay playsinline muted></video>
+                        <canvas id="captureCanvas" style="display:none;"></canvas>
+                        <div class="camera-fallback-bg" id="cameraFallbackBg"></div>
+                        <canvas id="pipCanvas" style="display:none;"></canvas>
+
+                        <!-- Bracket overlay -->
+                        <div class="bracket-overlay side-right" id="bracketOverlay">
+                            <div class="bracket bracket-left" id="bracketLeft"></div>
+                            <div class="bracket bracket-right" id="bracketRight"></div>
+                            <div class="crosshair">
+                                <div class="cross-h"></div>
+                                <div class="cross-v"></div>
+                            </div>
+                        </div>
+
+                        <!-- Foot toggle -->
+                        <div class="camera-foot-toggle">
+                            <span class="toggle-label">Foot:</span>
+                            <div class="toggle-pills">
+                                <button class="toggle-btn" data-side="left" id="toggleLeft">LEFT</button>
+                                <button class="toggle-btn active" data-side="right" id="toggleRight">RIGHT</button>
+                            </div>
+                        </div>
+
+                        <!-- Camera status badge -->
+                        <div class="cam-status-badge" id="camStatusBadge">
+                            <span class="cam-dot"></span> LIVE
+                        </div>
+                    </div>
+
+                    <div class="camera-actions">
+                        <button class="capture-btn" id="captureBtn">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>
+                            CAPTURE
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Control panel -->
+                <div class="control-panel">
+                    <div class="control-card instructions-card">
+                        <h3 class="control-title">How to Scan</h3>
+                        <ol class="scan-steps">
+                            <li><span>1</span> Remove your shoe and sock</li>
+                            <li><span>2</span> Place A4 paper flat on the floor</li>
+                            <li><span>3</span> Stand with your foot next to the paper</li>
+                            <li><span>4</span> Position within the cyan brackets</li>
+                            <li><span>5</span> Press CAPTURE when ready</li>
+                        </ol>
+                    </div>
+
+                    <div class="control-card result-preview-card" id="resultPreviewCard" style="display:none;">
+                        <h3 class="control-title">Last Result</h3>
+                        <div class="quick-result" id="quickResult"></div>
+                    </div>
+
+                    <!-- Processing state -->
+                    <div class="control-card processing-card" id="processingCard" style="display:none;">
+                        <div class="processing-ring-sm">
+                            <svg class="ring-svg-sm" viewBox="0 0 80 80">
+                                <circle class="ring-track-sm" cx="40" cy="40" r="34"/>
+                                <circle class="ring-progress-sm" cx="40" cy="40" r="34"/>
+                            </svg>
+                        </div>
+                        <p class="processing-label" id="processingStatus">Analyzing...</p>
+                        <div class="p-steps-sm">
+                            <div class="p-step-sm" data-step="detect">Detecting A4 paper</div>
+                            <div class="p-step-sm" data-step="segment">Segmenting foot</div>
+                            <div class="p-step-sm" data-step="measure">Calculating size</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ======= HISTORY ======= -->
+        <section class="content-section" id="sectionHistory">
+            <div class="history-header">
+                <h3>All Scan Records</h3>
+                <button class="clear-btn" id="clearHistoryBtn">Clear All</button>
+            </div>
+            <div class="history-table-wrapper">
+                <table class="history-table" id="historyTable">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Date</th>
+                            <th>Time</th>
+                            <th>Foot</th>
+                            <th>Length</th>
+                            <th>Width</th>
+                            <th>IND/UK</th>
+                            <th>US</th>
+                            <th>EU</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyTableBody">
+                        <tr class="empty-row">
+                            <td colspan="9">No scan records yet. Go to Scanner to get started.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+</div>
+
+<script src="config.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
