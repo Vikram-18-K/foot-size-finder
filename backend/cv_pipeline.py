@@ -202,37 +202,45 @@ def segment_foot(image: np.ndarray, paper_rect: np.ndarray, foot_side: str):
     margin = int(max_dim * 0.05)
     cv2.rectangle(mask, (0, 0), (sw, sh), cv2.GC_BGD, margin)
     
-    bgdModel = np.zeros((1,65),np.float64)
-    fgdModel = np.zeros((1,65),np.float64)
+    # 1. Faster Segmentation: Adaptive Thresholding (Instant compared to GrabCut)
+    gray = cv2.cvtColor(small_image, cv2.COLOR_BGR2GRAY)
     
-    try:
-        cv2.grabCut(small_image, mask, None, bgdModel, fgdModel, 1, cv2.GC_INIT_WITH_MASK)
-    except cv2.error:
-        raise CVError("Could not isolate foot. Ensure foot is clearly separated from background.")
-        
-    # Extract foreground
-    mask2 = np.where((mask==2)|(mask==0), 0, 1).astype('uint8')
+    # Use a large block size for adaptive threshold to handle uneven lighting
+    thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+                                   cv2.THRESH_BINARY_INV, 21, 5)
     
-    # Clean up noise
+    # 2. Mask out the paper and edges
+    mask = np.ones(gray.shape, dtype=np.uint8) * 255
+    cv2.fillPoly(mask, [small_paper_rect.astype(np.int32)], 0)
+    
+    # Keep only the region where we expect the foot
+    roi_mask = np.zeros(gray.shape, dtype=np.uint8)
+    cv2.rectangle(roi_mask, (x1, y1), (x2, y2), 255, -1)
+    
+    # Combine masks
+    final_mask = cv2.bitwise_and(thresh, thresh, mask=cv2.bitwise_and(mask, roi_mask))
+    
+    # 3. Clean up noise
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-    mask2 = cv2.morphologyEx(mask2, cv2.MORPH_OPEN, kernel, iterations=1)
-    mask2 = cv2.morphologyEx(mask2, cv2.MORPH_CLOSE, kernel, iterations=2)
+    cleaned = cv2.morphologyEx(final_mask, cv2.MORPH_OPEN, kernel, iterations=1)
+    cleaned = cv2.morphologyEx(cleaned, cv2.MORPH_CLOSE, kernel, iterations=2)
     
-    # Upscale mask back to original resolution
-    full_mask = cv2.resize(mask2, (w, h), interpolation=cv2.INTER_NEAREST)
-    
-    contours, _ = cv2.findContours(full_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    # 4. Find contours in the cleaned mask
+    contours, _ = cv2.findContours(cleaned, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     
     if not contours:
         raise CVError("Foot not detected next to the paper.")
         
-    # Filter valid contours
-    valid_contours = [c for c in contours if cv2.contourArea(c) > (5000 / (scale * scale))]
+    # Filter valid contours by area relative to scaled resolution
+    valid_contours = [c for c in contours if cv2.contourArea(c) > 1000]
     
     if not valid_contours:
-        raise CVError("Detected object too small to be a foot.")
+        raise CVError("Could not isolate a clear foot shape.")
         
     foot_contour = max(valid_contours, key=cv2.contourArea)
+    
+    # Upscale contour back to original resolution
+    foot_contour = (foot_contour / scale).astype(np.int32)
     return foot_contour
 
 def measure_foot(foot_contour, M):
@@ -413,7 +421,7 @@ def fast_validate_image(image: np.ndarray, foot_side: str) -> dict:
                 max_area = area
                 
     if not response["foot_detected"]:
-        response["message"] = "Foot not detected next to paper."
+        response["message"] = "Foot not detected next to paper. Please ensure clear contrast."
         return response
         
     # Validation Passed

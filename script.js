@@ -584,7 +584,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         let base64 = providedBase64;
         if(!base64 && cameraReady && videoElement.videoWidth>0) {
-            const maxDim = 600;
+            const maxDim = 512;
             let w = videoElement.videoWidth;
             let h = videoElement.videoHeight;
             if (w > maxDim || h > maxDim) {
@@ -597,6 +597,8 @@ document.addEventListener('DOMContentLoaded', () => {
             captureCanvas.getContext('2d').drawImage(videoElement,0,0,w,h);
             base64 = captureCanvas.toDataURL('image/jpeg',0.6);
         }
+
+        console.log("Capture initiated. Base64 length:", base64 ? base64.length : 0);
 
         // Show processing UI
         if(processingCard) processingCard.style.display='flex';
@@ -611,6 +613,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     body: JSON.stringify({image_base64:base64, foot_side:currentFoot})
                 });
                 const valData = await valRes.json();
+                console.log("Validation result:", valData);
                 
                 if(!valData.valid) {
                     if(processingStatus) processingStatus.textContent = valData.message || 'Validation failed. Adjust and retry.';
