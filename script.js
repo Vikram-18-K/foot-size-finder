@@ -554,11 +554,23 @@ document.addEventListener('DOMContentLoaded', () => {
         triggerUploadBtn.addEventListener('click', () => photoUpload.click());
     }
 
+    const newScanBtn = document.getElementById('newScanBtn');
+    if(newScanBtn) {
+        newScanBtn.addEventListener('click', () => {
+            if(resultPreviewCard) resultPreviewCard.style.display='none';
+            if(videoElement && cameraReady){videoElement.style.opacity='1'; videoElement.play().catch(()=>{});}
+            if(bracketOverlay) bracketOverlay.style.display = 'block';
+            lastRawResult = null;
+        });
+    }
+
     if(photoUpload) photoUpload.addEventListener('change', e => {
         const file = e.target.files[0]; if(!file) return;
         const reader = new FileReader();
         reader.onload = async ev => {
             const base64 = ev.target.result;
+            // Stop and hide the camera view for clean upload processing
+            if(videoElement){videoElement.pause();videoElement.style.opacity='0';}
             if(bracketOverlay) bracketOverlay.style.display = 'none';
             await captureAndProcess(base64);
         };
