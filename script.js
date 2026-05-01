@@ -247,20 +247,20 @@ document.addEventListener('DOMContentLoaded', () => {
     // ═══════════════════════════════════════
     // HISTORY STORAGE
     // ═══════════════════════════════════════
-    function getHistory() {
+    async function getHistory() {
         try {
-            return window.fsf ? window.fsf.getHistory() :
+            return window.fsf ? await window.fsf.getHistory() :
                 JSON.parse(localStorage.getItem('fsf_history_guest')||'[]');
         } catch { return []; }
     }
 
-    function saveResult(result) {
+    async function saveResult(result) {
         const entry = {
             id: Date.now(), timestamp: new Date().toISOString(),
             foot: result.foot, length_cm: result.length_cm, width_cm: result.width_cm,
             uk: result.uk, us: result.us, eu: result.eu, ind: result.ind
         };
-        if(window.fsf) window.fsf.saveResult(entry);
+        if(window.fsf) await window.fsf.saveResult(entry);
         else {
             const arr = JSON.parse(localStorage.getItem('fsf_history_guest')||'[]');
             arr.unshift(entry);
@@ -272,8 +272,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // ═══════════════════════════════════════
     // DASHBOARD
     // ═══════════════════════════════════════
-    function refreshDashboard() {
-        const history = getHistory();
+    async function refreshDashboard() {
+        const history = await getHistory();
         if(statTotal) statTotal.textContent = history.length;
         if(history.length > 0) {
             const last = history[0];
@@ -306,8 +306,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // ═══════════════════════════════════════
     // HISTORY TABLE
     // ═══════════════════════════════════════
-    function renderHistoryTable() {
-        const history = getHistory();
+    async function renderHistoryTable() {
+        const history = await getHistory();
         if(!historyTableBody) return;
         if(!history.length) {
             historyTableBody.innerHTML = `<tr class="empty-row"><td colspan="9">No scan records yet. Go to Scanner to get started.</td></tr>`;
@@ -331,12 +331,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }).join('');
     }
 
-    if(clearHistoryBtn) clearHistoryBtn.addEventListener('click', () => {
+    if(clearHistoryBtn) clearHistoryBtn.addEventListener('click', async () => {
         if(!confirm('Clear all scan history?')) return;
-        const uid = window.fsf && window.fsf.currentUser() ? window.fsf.currentUser().uid : 'guest';
-        localStorage.removeItem(`fsf_history_${uid}`);
-        renderHistoryTable();
-        refreshDashboard();
+        if(window.fsf) {
+            await window.fsf.clearHistory();
+        } else {
+            localStorage.removeItem('fsf_history_guest');
+        }
+        await renderHistoryTable();
+        await refreshDashboard();
     });
 
     // ═══════════════════════════════════════
@@ -490,7 +493,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const eu  = Math.round(data.length_cm*1.5+2);
                     const ind = uk;
                     const result = {foot:currentFoot, length_cm:data.length_cm, width_cm:data.width_cm, uk, us, eu, ind};
-                    saveResult(result);
+                    await saveResult(result);
                     showQuickResult(result);
                     if(processingCard) processingCard.style.display='none';
                     if(resultPreviewCard) resultPreviewCard.style.display='block';
