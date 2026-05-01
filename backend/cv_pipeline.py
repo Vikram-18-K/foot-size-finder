@@ -12,6 +12,31 @@ A4_WIDTH_CM = 21.0
 A4_LENGTH_CM = 29.7
 PIXELS_PER_CM = 10.0  # Standardized scale in the warped coordinate space
 
+def enhance_image(image: np.ndarray):
+    """
+    Super-fast image enhancement optimized for foot detection.
+    Suppresses shadows and sharpens edges at low resolution.
+    """
+    # 1. Faster Contrast Enhancement: Convert to YUV (faster than LAB)
+    yuv = cv2.cvtColor(image, cv2.COLOR_BGR2YUV)
+    y, u, v = cv2.split(yuv)
+    
+    # 2. Apply CLAHE only to the Y (luminance) channel
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(4,4)) # Smaller grid = Faster
+    y = clahe.apply(y)
+    
+    # 3. Shadow Suppression: Normalize the luminance
+    y = cv2.normalize(y, None, 0, 255, cv2.NORM_MINMAX)
+    
+    # 4. Merge back
+    enhanced = cv2.cvtColor(cv2.merge((y, u, v)), cv2.COLOR_YUV2BGR)
+    
+    # 5. Fast Sharpening using a simple kernel (faster than Gaussian Blur)
+    kernel = np.array([[-1,-1,-1], [-1,9,-1], [-1,-1,-1]])
+    sharpened = cv2.filter2D(enhanced, -1, kernel)
+    
+    return sharpened
+
 def validate_image_quality(image: np.ndarray, threshold: float = 15.0):
     """
     Rejects blurry images using Laplacian variance.
@@ -135,6 +160,10 @@ def segment_foot(image: np.ndarray, paper_rect: np.ndarray, foot_side: str):
         scale = max_dim / max(h, w)
         
     small_image = cv2.resize(image, (int(w * scale), int(h * scale)))
+    
+    # Enhance the small image only (much faster)
+    small_image = enhance_image(small_image)
+    
     sh, sw = small_image.shape[:2]
     
     # Scale paper rect
@@ -247,9 +276,9 @@ def calculate_shoe_size(length_cm: float):
     us_raw = (3 * length_inches) - 22
     uk_raw = us_raw - 1
     
-    # Round to nearest 0.5
-    us_size = max(1.0, round(us_raw * 2.0) / 2.0)
-    uk_size = max(1.0, round(uk_raw * 2.0) / 2.0)
+    # Round to nearest whole number (integer)
+    us_size = max(1, int(round(us_raw)))
+    uk_size = max(1, int(round(uk_raw)))
     
     return uk_size, us_size
 
@@ -308,6 +337,7 @@ def fast_validate_image(image: np.ndarray, foot_side: str) -> dict:
         scale = max_dim / max(h, w)
         image = cv2.resize(image, (int(w * scale), int(h * scale)))
 
+    image = enhance_image(image)
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     
     # 1. Blur Detection (Laplacian Variance)

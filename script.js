@@ -72,6 +72,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let autoCaptureEnabled = false;
     let targetAccel = null;
     let stableStartTime = 0;
+    let currentFit = 'normal';
+    let lastRawResult = null;
 
     // ═══════════════════════════════════════
     // PARTICLE BACKGROUND (login)
@@ -438,6 +440,23 @@ document.addEventListener('DOMContentLoaded', () => {
     if(toggleLeft)  toggleLeft.addEventListener('click',  ()=>setActiveFoot('left'));
     if(toggleRight) toggleRight.addEventListener('click', ()=>setActiveFoot('right'));
 
+    // Fit Preference Toggle
+    const fitToggle = document.getElementById('fitToggle');
+    if(fitToggle) {
+        fitToggle.addEventListener('click', e => {
+            const btn = e.target.closest('.toggle-btn');
+            if(!btn) return;
+            fitToggle.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentFit = btn.dataset.fit;
+            
+            // If there's an active result on screen, update it instantly
+            if(lastRawResult) {
+                showQuickResult(lastRawResult);
+            }
+        });
+    }
+
     // ═══════════════════════════════════════
     // AUTO-CAPTURE (GYROSCOPE)
     // ═══════════════════════════════════════
@@ -540,9 +559,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const reader = new FileReader();
         reader.onload = async ev => {
             const base64 = ev.target.result;
-            // Stop the camera view but don't show the static image
-            stopPipMirror();
-            if(videoElement){videoElement.pause();videoElement.style.opacity='0';}
             if(bracketOverlay) bracketOverlay.style.display = 'none';
             await captureAndProcess(base64);
         };
@@ -609,6 +625,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const eu  = Math.round(data.length_cm*1.5+2);
                     const ind = uk;
                     const result = {foot:currentFoot, length_cm:data.length_cm, width_cm:data.width_cm, uk, us, eu, ind};
+                    lastRawResult = result; // Store for fit toggling
                     await saveResult(result);
                     showQuickResult(result);
                     if(processingCard) processingCard.style.display='none';
@@ -633,8 +650,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const li = document.getElementById('loadedPhotoPreview');
         if(li){li.style.display='none';}
         if(bracketOverlay) bracketOverlay.style.display = 'block';
-        if(videoElement && cameraReady){videoElement.style.opacity='1'; videoElement.play().catch(()=>{});}
-        startPipMirror();
     }
 
     function animateProcessing() {
@@ -655,14 +670,26 @@ document.addEventListener('DOMContentLoaded', () => {
     function showQuickResult(r) {
         const el = document.getElementById('quickResult');
         if(!el) return;
+
+        // Apply Fit Adjustment (using whole numbers as requested)
+        let adj = 0;
+        if (currentFit === 'loose') adj = 1;
+        if (currentFit === 'tight') adj = -1;
+
+        const adjUK = Math.max(1, r.uk + adj);
+        const adjUS = Math.max(1, r.us + adj);
+        const adjEU = Math.max(30, r.eu + (adj * 1.5)); // EU sizes are larger increments
+
         el.innerHTML = `
-            <div class="qr-size">${r.ind}</div>
-            <div style="font-size:12px;color:rgba(255,255,255,.5);margin-bottom:8px;">${r.foot.toUpperCase()} FOOT · ${r.length_cm} cm × ${r.width_cm} cm</div>
+            <div class="qr-size">${adjUK}</div>
+            <div style="font-size:12px;color:rgba(255,255,255,.5);margin-bottom:8px;">
+                ${currentFit.toUpperCase()} FIT · ${r.foot.toUpperCase()} FOOT · ${r.length_cm} cm
+            </div>
             <div class="qr-row">
-                <span class="qr-chip">🇮🇳 IND ${r.ind}</span>
-                <span class="qr-chip">🇺🇸 US ${r.us}</span>
-                <span class="qr-chip">🇬🇧 UK ${r.uk}</span>
-                <span class="qr-chip">🇪🇺 EU ${r.eu}</span>
+                <span class="qr-chip">🇮🇳 IND ${adjUK}</span>
+                <span class="qr-chip">🇺🇸 US ${adjUS}</span>
+                <span class="qr-chip">🇬🇧 UK ${adjUK}</span>
+                <span class="qr-chip">🇪🇺 EU ${Math.round(adjEU)}</span>
             </div>`;
         refreshDashboard();
     }
