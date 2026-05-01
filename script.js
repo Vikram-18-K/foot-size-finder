@@ -308,7 +308,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return `<div class="recent-card">
                 <div class="recent-card-foot">${e.foot.toUpperCase()} FOOT</div>
                 <div class="recent-card-size">${e.ind}</div>
-                <div class="recent-card-sub">${e.length_cm} cm × ${e.width_cm} cm &nbsp;·&nbsp; US ${e.us} / EU ${e.eu}</div>
+                <div class="recent-card-sub">${e.length_cm} cm × ${e.width_cm} cm &nbsp;·&nbsp; 🇺🇸 US ${e.us} / 🇪🇺 EU ${e.eu}</div>
                 <div class="recent-card-time">${dt}</div>
             </div>`;
         }).join('');
@@ -335,9 +335,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td><span class="foot-badge ${e.foot}">${e.foot}</span></td>
                 <td>${e.length_cm} cm</td>
                 <td>${e.width_cm} cm</td>
-                <td class="size-val">${e.ind}</td>
-                <td class="size-val">${e.us}</td>
-                <td class="size-val">${e.eu}</td>
+                <td class="size-val">🇮🇳 ${e.ind}</td>
+                <td class="size-val">🇺🇸 ${e.us}</td>
+                <td class="size-val">🇪🇺 ${e.eu}</td>
                 <td>
                     <button class="delete-row-btn" data-id="${e.id}" title="Delete Record">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
@@ -646,24 +646,32 @@ document.addEventListener('DOMContentLoaded', () => {
                     if(processingCard) processingCard.style.display='none';
                     if(resultPreviewCard) resultPreviewCard.style.display='block';
                 } else {
-                    if(processingStatus) processingStatus.textContent = data.message||data.detail||'Detection failed. Adjust and retry.';
+                    const msg = data.message||data.detail||'Detection failed. Ensure full A4 paper and foot are visible.';
+                    if(processingStatus) processingStatus.textContent = msg;
+                    alert(msg);
                     setTimeout(()=>{if(processingCard)processingCard.style.display='none';},3000);
                 }
             } catch(e) {
-                if(processingStatus) processingStatus.textContent = 'Server unreachable. Check backend.';
+                console.error("Processing error:", e);
+                const msg = 'Connection error. Please check your internet and try again.';
+                if(processingStatus) processingStatus.textContent = msg;
+                alert(msg);
                 setTimeout(()=>{if(processingCard)processingCard.style.display='none';},3000);
             }
         } else {
-            if(processingStatus) processingStatus.textContent = 'No image captured. Try Gallery.';
+            alert('No image captured. Please try again.');
             setTimeout(()=>{if(processingCard)processingCard.style.display='none';},2500);
         }
 
         isCapturing = false;
         if(captureBtn){captureBtn.disabled=false; captureBtn.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg> CAPTURE';}
         if(photoUpload) photoUpload.value='';
-        // Restore camera
-        const li = document.getElementById('loadedPhotoPreview');
-        if(li){li.style.display='none';}
+        
+        // CRITICAL: Always restore camera visibility if it was hidden
+        if(videoElement){
+            videoElement.style.opacity='1';
+            videoElement.play().catch(()=>{});
+        }
         if(bracketOverlay) bracketOverlay.style.display = 'block';
     }
 

@@ -77,8 +77,8 @@ def detect_a4_paper(image: np.ndarray):
     paper_contour = None
     for c in contours:
         peri = cv2.arcLength(c, True)
-        # Loosen approximation slightly to ignore small jagged edges
-        approx = cv2.approxPolyDP(c, 0.03 * peri, True)
+        # Loosen approximation to handle slightly curved or rough paper edges
+        approx = cv2.approxPolyDP(c, 0.04 * peri, True)
         
         # Look for a large 4-sided polygon
         if len(approx) == 4 and cv2.contourArea(approx) > 5000:
@@ -295,24 +295,39 @@ def process_image(image: np.ndarray, foot_side: str) -> dict:
     validate_image_quality(image)
     
     # 2. Detect reference and validate camera tilt
-    rect, maxWidth, maxHeight = detect_a4_paper(image)
+    try:
+        rect, maxWidth, maxHeight = detect_a4_paper(image)
+    except CVError as e:
+        logger.error(f"Paper detection failed: {str(e)}")
+        raise e
     
     # 3. Calculate scaling transform
     M = get_homography(rect, maxWidth, maxHeight)
     
-    # 4. Isolate foot using robust GrabCut
-    foot_contour = segment_foot(image, rect, foot_side)
+    # 4. Isolate foot using high-speed contour analysis
+    # SMART FEATURE: If foot is not found on the selected side, automatically try the other side
+    try:
+        foot_contour = segment_foot(image, rect, foot_side)
+    except CVError:
+        # Try the opposite side automatically
+        other_side = "right" if foot_side == "left" else "left"
+        try:
+            foot_contour = segment_foot(image, rect, other_side)
+            foot_side = other_side # Update if found
+        except CVError:
+            raise CVError("Foot not detected on either side of the paper. Please ensure foot is visible.")
     
     # 5. Extract accurate metrics via rotation-invariant transform
     length_cm, width_cm = measure_foot(foot_contour, M)
     
     # Post-validation sanity check
-    if length_cm < 10 or length_cm > 35:
-        raise CVError(f"Calculated length ({length_cm:.1f} cm) is physically unlikely. Please adjust lighting and re-scan.")
+    if length_cm < 10 or length_cm > 40:
+        raise CVError(f"Calculated length ({length_cm:.1f} cm) is unlikely. Check lighting and A4 paper.")
         
     uk_size, us_size = calculate_shoe_size(length_cm)
     
     return {
+        "foot_side": foot_side,
         "length_cm": round(length_cm, 1),
         "width_cm": round(width_cm, 1),
         "shoe_size_uk": uk_size,
