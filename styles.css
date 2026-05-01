@@ -185,6 +185,12 @@ html, body { height: 100%; font-family: var(--font); background: var(--bg); colo
     font-size: 13px; font-weight: 700; color: #fff;
 }
 .topbar-user span { font-size: 13px; color: var(--text2); }
+.topbar-signout-btn {
+    background: none; border: none; color: var(--text3); cursor: pointer;
+    margin-left: 12px; display: flex; align-items: center; justify-content: center;
+    transition: color .2s;
+}
+.topbar-signout-btn:hover { color: var(--red); }
 
 /* Content sections */
 .content-section { display: none; flex: 1; overflow-y: auto; padding: 32px; }
@@ -456,7 +462,8 @@ html, body { height: 100%; font-family: var(--font); background: var(--bg); colo
     
     /* Scanner */
     .scanner-layout { flex-direction: column; gap: 16px; }
-    .camera-panel { width: 100%; min-height: 50vh; }
+    .camera-panel { width: 100%; min-height: auto; }
+    .camera-feed-wrapper { aspect-ratio: 3/4; min-height: auto; }
     .control-panel { width: 100%; overflow: visible; }
     
     /* History Table */

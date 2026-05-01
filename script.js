@@ -26,6 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const toggleLeft      = document.getElementById('toggleLeft');
     const toggleRight     = document.getElementById('toggleRight');
     const captureBtn      = document.getElementById('captureBtn');
+    const autoCaptureToggle = document.getElementById('autoCaptureToggle');
     const photoUpload     = document.getElementById('photoUpload');
     const pipCanvas       = document.getElementById('pipCanvas');
     const processingCard  = document.getElementById('processingCard');
@@ -68,6 +69,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let cameraReady   = false;
     let isCapturing   = false;
     let pipAnimFrame  = null;
+    let autoCaptureEnabled = false;
+    let targetAccel = null;
+    let stableStartTime = 0;
 
     // ═══════════════════════════════════════
     // PARTICLE BACKGROUND (login)
@@ -201,11 +205,16 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Sign out
-    if(signOutBtn) signOutBtn.addEventListener('click', () => {
+    const topbarSignOutBtn = document.getElementById('topbarSignOutBtn');
+
+    function handleSignOut() {
         if(window.fsf) window.fsf.signOut();
         stopCamera(); currentUser = null;
         mainApp.classList.add('hidden'); loginPage.classList.remove('hidden');
-    });
+    }
+
+    if(signOutBtn) signOutBtn.addEventListener('click', handleSignOut);
+    if(topbarSignOutBtn) topbarSignOutBtn.addEventListener('click', handleSignOut);
 
     // ═══════════════════════════════════════
     // SIDEBAR NAVIGATION
@@ -406,6 +415,85 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if(toggleLeft)  toggleLeft.addEventListener('click',  ()=>setActiveFoot('left'));
     if(toggleRight) toggleRight.addEventListener('click', ()=>setActiveFoot('right'));
+
+    // ═══════════════════════════════════════
+    // AUTO-CAPTURE (GYROSCOPE)
+    // ═══════════════════════════════════════
+    function handleMotion(event) {
+        if (!autoCaptureEnabled || !cameraReady || isCapturing) {
+            targetAccel = null;
+            if (captureBtn && captureBtn.textContent === 'HOLD STILL...') {
+                captureBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg> CAPTURE';
+            }
+            return;
+        }
+
+        const accel = event.accelerationIncludingGravity;
+        if (!accel || accel.x === null) return;
+
+        if (!targetAccel) {
+            targetAccel = { x: accel.x, y: accel.y, z: accel.z };
+            stableStartTime = Date.now();
+            return;
+        }
+
+        const dx = accel.x - targetAccel.x;
+        const dy = accel.y - targetAccel.y;
+        const dz = accel.z - targetAccel.z;
+        const delta = Math.sqrt(dx*dx + dy*dy + dz*dz);
+
+        if (delta > 0.8) { // Moved too much
+            targetAccel = { x: accel.x, y: accel.y, z: accel.z };
+            stableStartTime = Date.now();
+            if (captureBtn && captureBtn.textContent === 'HOLD STILL...') {
+                captureBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg> CAPTURE';
+            }
+        } else {
+            const elapsed = Date.now() - stableStartTime;
+            if (elapsed > 400 && captureBtn && captureBtn.textContent !== 'HOLD STILL...') {
+                captureBtn.textContent = 'HOLD STILL...';
+            }
+            if (elapsed > 1500) {
+                targetAccel = null;
+                if (captureBtn) captureBtn.click();
+            }
+        }
+    }
+
+    if (autoCaptureToggle) {
+        autoCaptureToggle.addEventListener('click', async () => {
+            if (!autoCaptureEnabled) {
+                if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+                    try {
+                        const permission = await DeviceMotionEvent.requestPermission();
+                        if (permission !== 'granted') {
+                            alert('Motion permission is required for Auto-Capture.');
+                            return;
+                        }
+                    } catch (e) {
+                        console.error(e);
+                        alert('Could not request motion permission.');
+                        return;
+                    }
+                }
+                autoCaptureEnabled = true;
+                autoCaptureToggle.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22A10 10 0 1 0 12 2a10 10 0 0 0 0 20z"></path><path d="M12 6v6l4 2"></path></svg> AUTO: ON';
+                autoCaptureToggle.style.color = '#34D399';
+                autoCaptureToggle.style.borderColor = 'rgba(52,211,153,0.3)';
+                window.addEventListener('devicemotion', handleMotion);
+            } else {
+                autoCaptureEnabled = false;
+                targetAccel = null;
+                autoCaptureToggle.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22A10 10 0 1 0 12 2a10 10 0 0 0 0 20z"></path><path d="M12 6v6l4 2"></path></svg> AUTO: OFF';
+                autoCaptureToggle.style.color = '';
+                autoCaptureToggle.style.borderColor = '';
+                window.removeEventListener('devicemotion', handleMotion);
+                if (captureBtn && captureBtn.textContent === 'HOLD STILL...') {
+                    captureBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg> CAPTURE';
+                }
+            }
+        });
+    }
 
     // ═══════════════════════════════════════
     // CAPTURE

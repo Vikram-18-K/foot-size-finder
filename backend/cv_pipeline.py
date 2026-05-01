@@ -235,8 +235,8 @@ def measure_foot(foot_contour, M):
     length_cm = length_px / PIXELS_PER_CM
     width_cm = width_px / PIXELS_PER_CM
     
-    # 3D Projection Compensation (2% reduction to account for ankle/heel height projecting outward)
-    length_cm = length_cm * 0.98
+    # 3D Projection Compensation (5% reduction to account for ankle/heel height projecting outward due to loosened tilt rules)
+    length_cm = length_cm * 0.95
     
     return length_cm, width_cm
 
