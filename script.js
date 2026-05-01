@@ -437,19 +437,48 @@ document.addEventListener('DOMContentLoaded', () => {
 
         let base64 = providedBase64;
         if(!base64 && cameraReady && videoElement.videoWidth>0) {
-            captureCanvas.width = videoElement.videoWidth;
-            captureCanvas.height = videoElement.videoHeight;
-            captureCanvas.getContext('2d').drawImage(videoElement,0,0,captureCanvas.width,captureCanvas.height);
-            base64 = captureCanvas.toDataURL('image/jpeg',0.85);
+            const maxDim = 800;
+            let w = videoElement.videoWidth;
+            let h = videoElement.videoHeight;
+            if (w > maxDim || h > maxDim) {
+                const scale = maxDim / Math.max(w, h);
+                w = Math.floor(w * scale);
+                h = Math.floor(h * scale);
+            }
+            captureCanvas.width = w;
+            captureCanvas.height = h;
+            captureCanvas.getContext('2d').drawImage(videoElement,0,0,w,h);
+            base64 = captureCanvas.toDataURL('image/jpeg',0.7);
         }
 
         // Show processing UI
         if(processingCard) processingCard.style.display='flex';
         if(resultPreviewCard) resultPreviewCard.style.display='none';
-        animateProcessing();
 
         if(base64) {
             try {
+                if(processingStatus) processingStatus.textContent = 'Validating image...';
+                
+                const valRes = await fetch(`${API_BASE}/api/validate`,{
+                    method:'POST', headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify({image_base64:base64, foot_side:currentFoot})
+                });
+                const valData = await valRes.json();
+                
+                if(!valData.valid) {
+                    if(processingStatus) processingStatus.textContent = valData.message || 'Validation failed. Adjust and retry.';
+                    setTimeout(()=>{
+                        if(processingCard) processingCard.style.display='none';
+                        isCapturing = false;
+                        if(captureBtn){captureBtn.disabled=false; captureBtn.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg> CAPTURE';}
+                        if(videoElement && cameraReady){videoElement.style.opacity='1'; videoElement.play().catch(()=>{});}
+                        startPipMirror();
+                    }, 3000);
+                    return;
+                }
+
+                animateProcessing();
+
                 const res = await fetch(`${API_BASE}/api/measure`,{
                     method:'POST', headers:{'Content-Type':'application/json'},
                     body: JSON.stringify({image_base64:base64, foot_side:currentFoot})
@@ -466,7 +495,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if(processingCard) processingCard.style.display='none';
                     if(resultPreviewCard) resultPreviewCard.style.display='block';
                 } else {
-                    if(processingStatus) processingStatus.textContent = data.detail||'Detection failed. Adjust and retry.';
+                    if(processingStatus) processingStatus.textContent = data.message||data.detail||'Detection failed. Adjust and retry.';
                     setTimeout(()=>{if(processingCard)processingCard.style.display='none';},3000);
                 }
             } catch(e) {

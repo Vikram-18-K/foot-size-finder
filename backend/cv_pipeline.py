@@ -12,7 +12,7 @@ A4_WIDTH_CM = 21.0
 A4_LENGTH_CM = 29.7
 PIXELS_PER_CM = 10.0  # Standardized scale in the warped coordinate space
 
-def validate_image_quality(image: np.ndarray, threshold: float = 30.0):
+def validate_image_quality(image: np.ndarray, threshold: float = 15.0):
     """
     Rejects blurry images using Laplacian variance.
     Expects variance to be above the given threshold.
@@ -56,10 +56,11 @@ def detect_a4_paper(image: np.ndarray):
     paper_contour = None
     for c in contours:
         peri = cv2.arcLength(c, True)
-        approx = cv2.approxPolyDP(c, 0.02 * peri, True)
+        # Loosen approximation slightly to ignore small jagged edges
+        approx = cv2.approxPolyDP(c, 0.03 * peri, True)
         
         # Look for a large 4-sided polygon
-        if len(approx) == 4 and cv2.contourArea(approx) > 10000:
+        if len(approx) == 4 and cv2.contourArea(approx) > 5000:
             paper_contour = approx
             break
             
@@ -79,19 +80,18 @@ def detect_a4_paper(image: np.ndarray):
     maxHeight = max(int(heightA), int(heightB))
     
     # Perspective Tilt Validation
-    # A massive difference between top/bottom width or left/right height indicates severe tilt
     width_ratio = min(widthA, widthB) / max(widthA, widthB)
     height_ratio = min(heightA, heightB) / max(heightA, heightB)
     
-    # Reject if perspective distortion exceeds ~10 degrees
-    if width_ratio < 0.82 or height_ratio < 0.82:
-        raise CVError("Camera angle is too tilted. Please hold the phone directly parallel to the floor.")
+    # Loosened perspective distortion tolerance
+    if width_ratio < 0.65 or height_ratio < 0.65:
+        raise CVError("Camera angle is too tilted. Please hold the phone more parallel to the floor.")
         
     # Aspect Ratio validation (A4 is ~1.414)
     aspect_ratio = maxHeight / float(maxWidth) if maxWidth > 0 else 0
     
-    # Allow some tolerance for perspective distortion. Check both portrait and landscape
-    if not (1.1 < aspect_ratio < 1.7) and not (0.6 < aspect_ratio < 0.9):
+    # Loosened aspect ratio validation
+    if not (1.0 < aspect_ratio < 1.9) and not (0.5 < aspect_ratio < 1.0):
         raise CVError("Detected reference object does not match A4 paper proportions.")
         
     return rect, maxWidth, maxHeight
@@ -315,7 +315,7 @@ def fast_validate_image(image: np.ndarray, foot_side: str) -> dict:
     
     # 1. Blur Detection (Laplacian Variance)
     variance = cv2.Laplacian(gray, cv2.CV_64F).var()
-    if variance < 25.0:
+    if variance < 15.0:  # Loosened from 25.0
         response["is_blurry"] = True
         response["message"] = "Image is too blurry. Please hold steady."
         return response
@@ -334,8 +334,8 @@ def fast_validate_image(image: np.ndarray, foot_side: str) -> dict:
     paper_contour = None
     for c in contours:
         peri = cv2.arcLength(c, True)
-        approx = cv2.approxPolyDP(c, 0.02 * peri, True)
-        if len(approx) == 4 and cv2.contourArea(approx) > 2000: # Scaled threshold
+        approx = cv2.approxPolyDP(c, 0.03 * peri, True)  # Loosened epsilon
+        if len(approx) == 4 and cv2.contourArea(approx) > 1000: # Loosened scaled threshold
             paper_contour = approx
             break
             
@@ -361,7 +361,7 @@ def fast_validate_image(image: np.ndarray, foot_side: str) -> dict:
     width_ratio = min(widthA, widthB) / max(widthA, widthB)
     height_ratio = min(heightA, heightB) / max(heightA, heightB)
     
-    if width_ratio < 0.70 or height_ratio < 0.70:
+    if width_ratio < 0.55 or height_ratio < 0.55:  # Loosened from 0.70
         response["message"] = "Camera angle is too tilted."
         return response
         
@@ -384,7 +384,7 @@ def fast_validate_image(image: np.ndarray, foot_side: str) -> dict:
     max_area = 0
     for c in foot_contours:
         area = cv2.contourArea(c)
-        if area > 4000:  # Scaled footprint threshold
+        if area > 1500:  # Loosened scaled footprint threshold from 4000
             response["foot_detected"] = True
             if area > max_area:
                 max_area = area
