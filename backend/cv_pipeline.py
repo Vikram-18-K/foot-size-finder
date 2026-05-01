@@ -129,7 +129,7 @@ def segment_foot(image: np.ndarray, paper_rect: np.ndarray, foot_side: str):
     h, w = image.shape[:2]
     
     # Fast processing: downsample if image is very large
-    max_dim = 640.0
+    max_dim = 320.0
     scale = 1.0
     if max(h, w) > max_dim:
         scale = max_dim / max(h, w)
@@ -181,7 +181,7 @@ def segment_foot(image: np.ndarray, paper_rect: np.ndarray, foot_side: str):
     fgdModel = np.zeros((1,65),np.float64)
     
     try:
-        cv2.grabCut(small_image, mask, None, bgdModel, fgdModel, 3, cv2.GC_INIT_WITH_MASK)
+        cv2.grabCut(small_image, mask, None, bgdModel, fgdModel, 2, cv2.GC_INIT_WITH_MASK)
     except cv2.error:
         raise CVError("Could not isolate foot. Ensure foot is clearly separated from background.")
         

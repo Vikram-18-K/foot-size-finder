@@ -518,17 +518,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const reader = new FileReader();
         reader.onload = async ev => {
             const base64 = ev.target.result;
+            // Stop the camera view but don't show the static image
             stopPipMirror();
             if(videoElement){videoElement.pause();videoElement.style.opacity='0';}
-            let img = document.getElementById('loadedPhotoPreview');
-            if(!img){
-                img = document.createElement('img');
-                img.id = 'loadedPhotoPreview';
-                img.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:contain;z-index:2;background:#0a0f1e;';
-                const wrap = document.getElementById('viewfinder');
-                if(wrap) wrap.appendChild(img);
-            }
-            img.src = base64; img.style.display = 'block';
+            if(bracketOverlay) bracketOverlay.style.display = 'none';
             await captureAndProcess(base64);
         };
         reader.readAsDataURL(file);
@@ -541,7 +534,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         let base64 = providedBase64;
         if(!base64 && cameraReady && videoElement.videoWidth>0) {
-            const maxDim = 800;
+            const maxDim = 600;
             let w = videoElement.videoWidth;
             let h = videoElement.videoHeight;
             if (w > maxDim || h > maxDim) {
@@ -552,7 +545,7 @@ document.addEventListener('DOMContentLoaded', () => {
             captureCanvas.width = w;
             captureCanvas.height = h;
             captureCanvas.getContext('2d').drawImage(videoElement,0,0,w,h);
-            base64 = captureCanvas.toDataURL('image/jpeg',0.7);
+            base64 = captureCanvas.toDataURL('image/jpeg',0.6);
         }
 
         // Show processing UI
@@ -617,6 +610,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Restore camera
         const li = document.getElementById('loadedPhotoPreview');
         if(li){li.style.display='none';}
+        if(bracketOverlay) bracketOverlay.style.display = 'block';
         if(videoElement && cameraReady){videoElement.style.opacity='1'; videoElement.play().catch(()=>{});}
         startPipMirror();
     }
