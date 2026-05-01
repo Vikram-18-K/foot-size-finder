@@ -147,31 +147,28 @@ def segment_foot(image: np.ndarray, paper_rect: np.ndarray, foot_side: str):
     # A4 Paper is Definite Background
     cv2.fillPoly(mask, [small_paper_rect.astype(np.int32)], cv2.GC_BGD)
     
-    # Get paper center to define probable foreground
-    M = cv2.moments(small_paper_rect.astype(np.int32))
-    if M["m00"] == 0:
-        raise CVError("Failed to calculate paper dimensions.")
-    cx = int(M['m10']/M['m00'])
-    cy = int(M['m01']/M['m00'])
-    
-    paper_width = np.linalg.norm(small_paper_rect[0] - small_paper_rect[1])
-    paper_height = np.linalg.norm(small_paper_rect[1] - small_paper_rect[2])
+    # Get bounding box of the paper to calculate margins accurately
+    x, y, paper_width, paper_height = cv2.boundingRect(small_paper_rect.astype(np.int32))
+    paper_right_edge = x + paper_width
+    paper_left_edge = x
     
     # Define bounding box for the foot
+    margin = int(paper_width * 0.1) # Start looking for foot slightly away from paper
     foot_w = int(paper_width * 1.5)
     foot_h = int(paper_height * 1.2)
     
     if foot_side == "left":
-        # Left foot means foot is on the left side of the paper
-        x1 = max(0, cx - int(paper_width*0.3) - foot_w)
-        x2 = max(0, cx - int(paper_width*0.3))
+        # Foot is to the left of the paper
+        x2 = max(0, paper_left_edge - margin)
+        x1 = max(0, x2 - foot_w)
     else:
-        # Right foot means foot is on the right side of the paper
-        x1 = min(sw, cx + int(paper_width*0.3))
-        x2 = min(sw, cx + int(paper_width*0.3) + foot_w)
+        # Foot is to the right of the paper
+        x1 = min(sw - 1, paper_right_edge + margin)
+        x2 = min(sw - 1, x1 + foot_w)
         
+    cy = y + paper_height // 2
     y1 = max(0, cy - int(foot_h/2))
-    y2 = min(sh, cy + int(foot_h/2))
+    y2 = min(sh - 1, cy + int(foot_h/2))
     
     # Mark the foot area as probable foreground
     cv2.rectangle(mask, (x1, y1), (x2, y2), cv2.GC_PR_FGD, -1)

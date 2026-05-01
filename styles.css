@@ -357,6 +357,9 @@ html, body { height: 100%; font-family: var(--font); background: var(--bg); colo
     font-size: 11px; font-weight: 700; color: var(--cyan); flex-shrink: 0;
 }
 
+.upload-rules { list-style: none; display: flex; flex-direction: column; gap: 8px; padding: 0; }
+.upload-rules li { font-size: 12px; color: var(--text2); line-height: 1.4; display: flex; gap: 6px; }
+
 /* Processing card */
 .processing-card { display: flex; flex-direction: column; align-items: center; gap: 12px; }
 .processing-ring-sm { width: 70px; height: 70px; position: relative; }

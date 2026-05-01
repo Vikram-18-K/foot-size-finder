@@ -455,6 +455,14 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if (elapsed > 1500) {
                 targetAccel = null;
+                // Disable Auto-Capture immediately so it doesn't loop infinitely
+                autoCaptureEnabled = false;
+                if (autoCaptureToggle) {
+                    autoCaptureToggle.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22A10 10 0 1 0 12 2a10 10 0 0 0 0 20z"></path><path d="M12 6v6l4 2"></path></svg> AUTO: OFF';
+                    autoCaptureToggle.style.color = '';
+                    autoCaptureToggle.style.borderColor = '';
+                }
+                window.removeEventListener('devicemotion', handleMotion);
                 if (captureBtn) captureBtn.click();
             }
         }
@@ -496,9 +504,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ═══════════════════════════════════════
-    // CAPTURE
+    // CAPTURE & UPLOAD
     // ═══════════════════════════════════════
     if(captureBtn) captureBtn.addEventListener('click', () => captureAndProcess());
+
+    const triggerUploadBtn = document.getElementById('triggerUploadBtn');
+    if(triggerUploadBtn && photoUpload) {
+        triggerUploadBtn.addEventListener('click', () => photoUpload.click());
+    }
 
     if(photoUpload) photoUpload.addEventListener('change', e => {
         const file = e.target.files[0]; if(!file) return;
