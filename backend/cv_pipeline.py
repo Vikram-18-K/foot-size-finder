@@ -202,42 +202,54 @@ def segment_foot(image: np.ndarray, paper_rect: np.ndarray, foot_side: str):
     margin = int(max_dim * 0.05)
     cv2.rectangle(mask, (0, 0), (sw, sh), cv2.GC_BGD, margin)
     
-    # 1. Faster Segmentation: Adaptive Thresholding (Instant compared to GrabCut)
+    # 1. Edge-Based Segmentation: Robust against similar colors (Dark foot on Dark floor)
     gray = cv2.cvtColor(small_image, cv2.COLOR_BGR2GRAY)
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
     
-    # Use a large block size for adaptive threshold to handle uneven lighting
-    thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
-                                   cv2.THRESH_BINARY_INV, 21, 5)
+    # Use Canny to find the sharp outline of the foot
+    edged = cv2.Canny(blurred, 30, 100)
     
-    # 2. Mask out the paper and edges
-    mask = np.ones(gray.shape, dtype=np.uint8) * 255
-    cv2.fillPoly(mask, [small_paper_rect.astype(np.int32)], 0)
+    # 2. Dilate edges to connect them into a solid shape
+    kernel_dil = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
+    dilated = cv2.dilate(edged, kernel_dil, iterations=2)
     
-    # Keep only the region where we expect the foot
+    # 3. Create Search Mask (ROI)
+    # Increase foot search width to 60% of image width to handle further placement
+    foot_w_roi = int(sw * 0.60)
+    if foot_side == "left":
+        search_x1 = max(0, paper_left_edge - foot_w_roi)
+        search_x2 = max(0, paper_left_edge - 5) # 5px gap from paper
+    else:
+        search_x1 = min(sw - 1, paper_right_edge + 5) # 5px gap from paper
+        search_x2 = min(sw - 1, search_x1 + foot_w_roi)
+        
     roi_mask = np.zeros(gray.shape, dtype=np.uint8)
-    cv2.rectangle(roi_mask, (x1, y1), (x2, y2), 255, -1)
+    cv2.rectangle(roi_mask, (search_x1, 0), (search_x2, sh), 255, -1)
     
-    # Combine masks
-    final_mask = cv2.bitwise_and(thresh, thresh, mask=cv2.bitwise_and(mask, roi_mask))
+    # 4. Mask the edges and find the largest blob
+    masked_edges = cv2.bitwise_and(dilated, dilated, mask=roi_mask)
     
-    # 3. Clean up noise
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-    cleaned = cv2.morphologyEx(final_mask, cv2.MORPH_OPEN, kernel, iterations=1)
-    cleaned = cv2.morphologyEx(cleaned, cv2.MORPH_CLOSE, kernel, iterations=2)
-    
-    # 4. Find contours in the cleaned mask
-    contours, _ = cv2.findContours(cleaned, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    # Fill the dilated edges to create a solid silhouette
+    contours, _ = cv2.findContours(masked_edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     
     if not contours:
-        raise CVError("Foot not detected next to the paper.")
+        raise CVError("No foot shape detected. Try moving the foot closer to the paper.")
         
-    # Filter valid contours by area relative to scaled resolution
-    valid_contours = [c for c in contours if cv2.contourArea(c) > 1000]
+    # Lower threshold to 500 to catch smaller/distant feet at 256px resolution
+    valid_contours = [c for c in contours if cv2.contourArea(c) > 500]
     
     if not valid_contours:
-        raise CVError("Could not isolate a clear foot shape.")
+        raise CVError("Foot shape too faint. Check lighting and ensure foot is bare.")
         
     foot_contour = max(valid_contours, key=cv2.contourArea)
+    
+    # 5. Refine the shape: Fill the contour to create a mask
+    foot_mask = np.zeros(gray.shape, dtype=np.uint8)
+    cv2.drawContours(foot_mask, [foot_contour], -1, 255, -1)
+    
+    # Find the refined contour of the filled shape
+    refined_contours, _ = cv2.findContours(foot_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    foot_contour = max(refined_contours, key=cv2.contourArea)
     
     # Upscale contour back to original resolution
     foot_contour = (foot_contour / scale).astype(np.int32)
