@@ -98,5 +98,21 @@ window.fsf = {
             }
         }
         localStorage.removeItem(`fsf_history_${uid}`);
+    },
+
+    deleteResult: async (id) => {
+        const uid = auth.currentUser ? auth.currentUser.uid : 'guest';
+        if (uid !== 'guest') {
+            try {
+                await db.collection('users').doc(uid).collection('scans').doc(id.toString()).delete();
+            } catch (e) {
+                console.error("Error deleting from cloud", e);
+            }
+        }
+        
+        const key = `fsf_history_${uid}`;
+        const history = JSON.parse(localStorage.getItem(key) || '[]');
+        const updated = history.filter(item => item.id.toString() !== id.toString());
+        localStorage.setItem(key, JSON.stringify(updated));
     }
 };

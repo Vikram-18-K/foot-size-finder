@@ -419,6 +419,13 @@ html, body { height: 100%; font-family: var(--font); background: var(--bg); colo
 .foot-badge.right { background: rgba(236,72,153,.12); color: #EC4899; }
 
 .size-val { font-family: var(--display); font-weight: 700; color: var(--text1); font-size: 14px; }
+.delete-row-btn {
+    background: rgba(255,107,107,0.1); border: 1px solid rgba(255,107,107,0.2);
+    color: var(--red); width: 30px; height: 30px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: all .2s;
+}
+.delete-row-btn:hover { background: rgba(255,107,107,0.25); transform: scale(1.05); }
 
 /* ===================== MOBILE RESPONSIVENESS ===================== */
 .sidebar-overlay {
