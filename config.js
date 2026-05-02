@@ -7,4 +7,4 @@
  * To switch to production, change the URL below to your Render backend:
  * e.g. "https://foot-scanner-api.onrender.com"
  */
-window.API_BASE_URL = 'https://foot-scanner-api.onrender.com';
+window.API_BASE_URL = 'http://localhost:8000';

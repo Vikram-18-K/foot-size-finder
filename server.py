@@ -5,7 +5,7 @@ PORT = 3000
 
 class MyHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
     def end_headers(self):
-        self.send_header("Cross-Origin-Opener-Policy", "same-origin-allow-popups")
+        self.send_header("Cross-Origin-Opener-Policy", "unsafe-none")
         self.send_header("Cross-Origin-Embedder-Policy", "unsafe-none")
         super().end_headers()
 

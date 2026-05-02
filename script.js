@@ -14,7 +14,23 @@ document.addEventListener('DOMContentLoaded', () => {
     const sectionHistory   = document.getElementById('sectionHistory');
 
     // ── Nav ──
+    const logoutBtns = document.querySelectorAll('.signout-btn, .topbar-signout-btn');
     const navItems = document.querySelectorAll('.nav-item');
+
+    // Guide Modal
+    const guideModal = document.getElementById('guideModal');
+    const openGuideBtn = document.getElementById('openGuideBtn');
+    const closeGuideBtn = document.getElementById('closeGuideBtn');
+    const gotItBtn = document.getElementById('gotItBtn');
+
+    if (openGuideBtn) openGuideBtn.addEventListener('click', () => guideModal.classList.add('active'));
+    if (closeGuideBtn) closeGuideBtn.addEventListener('click', () => guideModal.classList.remove('active'));
+    if (gotItBtn) gotItBtn.addEventListener('click', () => guideModal.classList.remove('active'));
+    if (guideModal) {
+        guideModal.addEventListener('click', (e) => {
+            if (e.target === guideModal) guideModal.classList.remove('active');
+        });
+    }
 
     // ── Scanner elements ──
     const videoElement    = document.getElementById('cameraFeed');
@@ -289,7 +305,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if(history.length > 0) {
             const last = history[0];
             const d = new Date(last.timestamp);
-            if(statLastSize) statLastSize.textContent = `${last.ind}`;
+            if(statLastSize) statLastSize.innerHTML = `<img src="https://flagcdn.com/w20/in.png" width="20" style="vertical-align:middle;margin-right:8px;border-radius:2px;"> ${last.ind}`;
             if(statLastDate) statLastDate.textContent = d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
         }
         renderRecentCards(history.slice(0,3));
@@ -308,7 +324,13 @@ document.addEventListener('DOMContentLoaded', () => {
             return `<div class="recent-card">
                 <div class="recent-card-foot">${e.foot.toUpperCase()} FOOT</div>
                 <div class="recent-card-size">${e.ind}</div>
-                <div class="recent-card-sub">${e.length_cm} cm × ${e.width_cm} cm &nbsp;·&nbsp; 🇺🇸 US ${e.us} / 🇪🇺 EU ${e.eu}</div>
+                <div class="recent-card-sub">${e.length_cm} cm × ${e.width_cm} cm</div>
+                <div class="recent-card-sizes">
+                    <span><img src="https://flagcdn.com/w20/in.png" width="16" style="vertical-align:middle;margin-right:4px;border-radius:1px;"> IND ${e.ind}</span> · 
+                    <span><img src="https://flagcdn.com/w20/us.png" width="16" style="vertical-align:middle;margin-right:4px;border-radius:1px;"> US ${e.us}</span> · 
+                    <span><img src="https://flagcdn.com/w20/gb.png" width="16" style="vertical-align:middle;margin-right:4px;border-radius:1px;"> UK ${e.uk}</span> · 
+                    <span><img src="https://flagcdn.com/w20/eu.png" width="16" style="vertical-align:middle;margin-right:4px;border-radius:1px;"> EU ${e.eu}</span>
+                </div>
                 <div class="recent-card-time">${dt}</div>
             </div>`;
         }).join('');
@@ -335,9 +357,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td><span class="foot-badge ${e.foot}">${e.foot}</span></td>
                 <td>${e.length_cm} cm</td>
                 <td>${e.width_cm} cm</td>
-                <td class="size-val">🇮🇳 ${e.ind}</td>
-                <td class="size-val">🇺🇸 ${e.us}</td>
-                <td class="size-val">🇪🇺 ${e.eu}</td>
+                <td class="size-val">
+                    <img src="https://flagcdn.com/w20/in.png" width="16" style="vertical-align:middle;border-radius:1px;">
+                    <img src="https://flagcdn.com/w20/gb.png" width="16" style="vertical-align:middle;border-radius:1px;margin-right:8px;">
+                    ${e.ind}
+                </td>
+                <td class="size-val"><img src="https://flagcdn.com/w20/us.png" width="16" style="vertical-align:middle;margin-right:6px;border-radius:1px;"> ${e.us}</td>
+                <td class="size-val"><img src="https://flagcdn.com/w20/eu.png" width="16" style="vertical-align:middle;margin-right:6px;border-radius:1px;"> ${e.eu}</td>
                 <td>
                     <button class="delete-row-btn" data-id="${e.id}" title="Delete Record">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
@@ -397,20 +423,48 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function initCamera() {
         if(!videoElement) return;
+        console.log("Initializing camera...");
         videoElement.style.opacity = '1';
-        if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){showFallback();return;}
+        if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
+            console.error("getUserMedia not supported");
+            showFallback();
+            return;
+        }
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080}}});
-            videoElement.srcObject = stream; currentStream = stream; cameraReady = true;
+            const constraints = {
+                video: {
+                    facingMode: 'environment',
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                }
+            };
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            videoElement.srcObject = stream; 
+            currentStream = stream; 
+            cameraReady = true;
             if(cameraFallbackBg) cameraFallbackBg.classList.remove('active');
-            videoElement.addEventListener('playing', startPipMirror, {once:true});
-        } catch {
+            
+            videoElement.onloadedmetadata = () => {
+                console.log("Camera metadata loaded:", videoElement.videoWidth, "x", videoElement.videoHeight);
+                videoElement.play().catch(e => console.error("Video play failed:", e));
+                startPipMirror();
+            };
+        } catch (err) {
+            console.warn("Primary camera failed, trying fallback...", err);
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({video:true});
-                videoElement.srcObject = stream; currentStream = stream; cameraReady = true;
+                videoElement.srcObject = stream; 
+                currentStream = stream; 
+                cameraReady = true;
                 if(cameraFallbackBg) cameraFallbackBg.classList.remove('active');
-                videoElement.addEventListener('playing', startPipMirror, {once:true});
-            } catch { showFallback(); }
+                videoElement.onloadedmetadata = () => {
+                    videoElement.play().catch(() => {});
+                    startPipMirror();
+                };
+            } catch (e) { 
+                console.error("Camera access denied:", e);
+                showFallback(); 
+            }
         }
     }
 
@@ -577,28 +631,53 @@ document.addEventListener('DOMContentLoaded', () => {
         reader.readAsDataURL(file);
     });
 
+    async function resizeImage(base64Str, maxDim = 1280) {
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+                let w = img.width;
+                let h = img.height;
+                if (w > maxDim || h > maxDim) {
+                    const scale = maxDim / Math.max(w, h);
+                    w = Math.floor(w * scale);
+                    h = Math.floor(h * scale);
+                }
+                const canvas = document.createElement('canvas');
+                canvas.width = w;
+                canvas.height = h;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, w, h);
+                // Increased quality to 0.85 for better CV results
+                resolve(canvas.toDataURL('image/jpeg', 0.85));
+            };
+            img.onerror = () => resolve(base64Str);
+            img.src = base64Str;
+        });
+    }
+
     async function captureAndProcess(providedBase64=null) {
         if(isCapturing) return;
         isCapturing = true;
         if(captureBtn){captureBtn.disabled=true; captureBtn.textContent='Processing...';}
 
         let base64 = providedBase64;
-        if(!base64 && cameraReady && videoElement.videoWidth>0) {
-            const maxDim = 512;
-            let w = videoElement.videoWidth;
-            let h = videoElement.videoHeight;
-            if (w > maxDim || h > maxDim) {
-                const scale = maxDim / Math.max(w, h);
-                w = Math.floor(w * scale);
-                h = Math.floor(h * scale);
-            }
-            captureCanvas.width = w;
-            captureCanvas.height = h;
-            captureCanvas.getContext('2d').drawImage(videoElement,0,0,w,h);
-            base64 = captureCanvas.toDataURL('image/jpeg',0.6);
+        
+        // If it's a camera capture
+        if(!base64 && cameraReady && videoElement.videoWidth > 0) {
+            captureCanvas.width = videoElement.videoWidth;
+            captureCanvas.height = videoElement.videoHeight;
+            captureCanvas.getContext('2d').drawImage(videoElement, 0, 0);
+            base64 = captureCanvas.toDataURL('image/jpeg', 0.8);
         }
 
-        console.log("Capture initiated. Base64 length:", base64 ? base64.length : 0);
+        if(base64) {
+            // ALWAYS resize before sending to backend to keep payload small
+            console.log("Input Base64 length:", base64.length);
+            base64 = await resizeImage(base64, 1280);
+            console.log("Processed Base64 length:", base64.length);
+        }
+
+        console.log("Processing initiated...");
 
         // Show processing UI
         if(processingCard) processingCard.style.display='flex';
@@ -622,6 +701,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         isCapturing = false;
                         if(captureBtn){captureBtn.disabled=false; captureBtn.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg> CAPTURE';}
                         if(videoElement && cameraReady){videoElement.style.opacity='1'; videoElement.play().catch(()=>{});}
+                        if(bracketOverlay) bracketOverlay.style.display = 'block';
                         startPipMirror();
                     }, 3000);
                     return;
@@ -646,10 +726,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     if(processingCard) processingCard.style.display='none';
                     if(resultPreviewCard) resultPreviewCard.style.display='block';
                 } else {
-                    const msg = data.message||data.detail||'Detection failed. Ensure full A4 paper and foot are visible.';
+                    const msg = data.message || 'Measurement failed. Please try again.';
                     if(processingStatus) processingStatus.textContent = msg;
                     alert(msg);
-                    setTimeout(()=>{if(processingCard)processingCard.style.display='none';},3000);
+                    setTimeout(()=>{
+                        if(processingCard) processingCard.style.display='none';
+                        if(bracketOverlay) bracketOverlay.style.display = 'block';
+                        if(videoElement && cameraReady){videoElement.style.opacity='1'; videoElement.play().catch(()=>{});}
+                    }, 3500);
                 }
             } catch(e) {
                 console.error("Processing error:", e);
@@ -709,10 +793,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 ${currentFit.toUpperCase()} FIT · ${r.foot.toUpperCase()} FOOT · ${r.length_cm} cm
             </div>
             <div class="qr-row">
-                <span class="qr-chip">🇮🇳 IND ${adjUK}</span>
-                <span class="qr-chip">🇺🇸 US ${adjUS}</span>
-                <span class="qr-chip">🇬🇧 UK ${adjUK}</span>
-                <span class="qr-chip">🇪🇺 EU ${Math.round(adjEU)}</span>
+                <span class="qr-chip"><img src="https://flagcdn.com/w20/in.png" width="16" style="vertical-align:middle;margin-right:4px;border-radius:1px;"> IND ${adjUK}</span>
+                <span class="qr-chip"><img src="https://flagcdn.com/w20/us.png" width="16" style="vertical-align:middle;margin-right:4px;border-radius:1px;"> US ${adjUS}</span>
+                <span class="qr-chip"><img src="https://flagcdn.com/w20/gb.png" width="16" style="vertical-align:middle;margin-right:4px;border-radius:1px;"> UK ${adjUK}</span>
+                <span class="qr-chip"><img src="https://flagcdn.com/w20/eu.png" width="16" style="vertical-align:middle;margin-right:4px;border-radius:1px;"> EU ${Math.round(adjEU)}</span>
             </div>`;
         refreshDashboard();
     }

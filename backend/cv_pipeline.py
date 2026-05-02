@@ -46,49 +46,80 @@ def order_points(pts):
 
 def detect_a4_paper(image: np.ndarray):
     """
-    Robust A4 detection using adaptive thresholding.
-    Finds the largest bright 4-sided object in the frame.
+    Ultimate robust A4 detection using multi-method fallbacks and threshold sweeping.
     """
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    blurred = cv2.GaussianBlur(gray, (7, 7), 0)
-    
-    # Use Adaptive Thresholding to find white paper on dark floor
-    thresh = cv2.adaptiveThreshold(blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
-                                   cv2.THRESH_BINARY, 11, 2)
-    
-    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    if not contours:
-        raise CVError("A4 paper not detected. Ensure it's fully visible on a dark floor.")
-        
     img_area = image.shape[0] * image.shape[1]
-    paper_contour = None
-    max_area = 0
     
-    for c in contours:
-        area = cv2.contourArea(c)
-        if area > (img_area * 0.04): # Paper must be > 4% of image (relaxed from 8%)
-            peri = cv2.arcLength(c, True)
-            approx = cv2.approxPolyDP(c, 0.02 * peri, True)
-            
-            # Relaxed: allow 4-6 points to account for noise/rounding
-            if 4 <= len(approx) <= 6:
-                # Use minAreaRect to get a consistent 4-point rectangle
-                rect_rot = cv2.minAreaRect(c)
-                box = cv2.boxPoints(rect_rot)
-                box = np.int0(box)
+    # Pre-processing
+    melted = cv2.medianBlur(gray, 7)
+    
+    def find_best_paper(thresh_img):
+        # Use RETR_LIST to find nested contours if necessary
+        cnts, _ = cv2.findContours(thresh_img, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+        if not cnts: return None
+        
+        best_cnt = None
+        max_score = -1
+        
+        for c in cnts:
+            area = cv2.contourArea(c)
+            # Ultra-lenient range: 0.1% to 95% of image
+            if (img_area * 0.001) < area < (img_area * 0.95):
+                hull = cv2.convexHull(c)
+                hull_area = cv2.contourArea(hull)
+                solidity = float(area) / hull_area if hull_area > 0 else 0
                 
-                # Check aspect ratio (A4 is ~1.41)
-                (x, y), (w_rot, h_rot), angle = rect_rot
-                aspect_ratio = max(w_rot, h_rot) / min(w_rot, h_rot)
-                
-                if 1.2 < aspect_ratio < 1.7 and area > max_area:
-                    paper_contour = box
-                    max_area = area
-                
-    if paper_contour is None:
-        raise CVError("A4 paper edges not detected. Check for glare or shadows.")
+                # Nuclear Leniency: solidity > 0.1
+                if solidity > 0.1:
+                    rect_rot = cv2.minAreaRect(c)
+                    (_, (wr, hr), _) = rect_rot
+                    if min(wr, hr) > 0:
+                        aspect_ratio = max(wr, hr) / min(wr, hr)
+                        # Ultra-lenient aspect ratio: 0.2 to 10.0
+                        if 0.2 < aspect_ratio < 10.0:
+                            # Scoring: Area * AspectRatioMatch
+                            ar_score = 1.0 / (1.0 + abs(aspect_ratio - 1.41))
+                            score = (area / img_area) * ar_score
+                            if score > max_score:
+                                max_score = score
+                                best_cnt = c
+        return best_cnt
 
-    rect = order_points(paper_contour.reshape(4, 2))
+    # 1. Try Global Otsu
+    _, thresh_otsu = cv2.threshold(melted, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    kernel = np.ones((5, 5), np.uint8)
+    thresh_otsu = cv2.morphologyEx(thresh_otsu, cv2.MORPH_CLOSE, kernel)
+    paper_cnt = find_best_paper(thresh_otsu)
+    
+    # 2. Fallback to Adaptive Threshold
+    if paper_cnt is None:
+        thresh_adapt = cv2.adaptiveThreshold(melted, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+                                             cv2.THRESH_BINARY, 51, 10)
+        thresh_adapt = cv2.morphologyEx(thresh_adapt, cv2.MORPH_CLOSE, kernel)
+        paper_cnt = find_best_paper(thresh_adapt)
+        
+    # 3. Fallback to Threshold Sweep (for very difficult lighting)
+    if paper_cnt is None:
+        for t in [200, 150, 100, 220, 80]:
+            _, thresh_fixed = cv2.threshold(melted, t, 255, cv2.THRESH_BINARY)
+            paper_cnt = find_best_paper(thresh_fixed)
+            if paper_cnt is not None: break
+
+    # 4. Fallback to Edge-based Detection
+    if paper_cnt is None:
+        edged = cv2.Canny(melted, 20, 100) # More sensitive Canny
+        dilated = cv2.dilate(edged, kernel, iterations=1)
+        paper_cnt = find_best_paper(dilated)
+        
+    if paper_cnt is None:
+        raise CVError("A4 paper not detected. Ensure it's fully visible and not covered by your foot.")
+
+    rect_rot = cv2.minAreaRect(paper_cnt)
+    box = cv2.boxPoints(rect_rot)
+    box = np.array(box, dtype=np.intp)
+    
+    rect = order_points(box.reshape(4, 2))
     (tl, tr, br, bl) = rect
     
     w = max(np.linalg.norm(br - bl), np.linalg.norm(tr - tl))
@@ -110,58 +141,62 @@ def get_homography(rect, maxWidth, maxHeight):
     return cv2.getPerspectiveTransform(rect, dst)
 
 def segment_foot(image: np.ndarray, paper_rect: np.ndarray, foot_side: str):
-    """Isolates the foot shape using edge-based contouring."""
+    """Isolates the foot shape using a combination of edge detection and adaptive thresholding."""
     h, w = image.shape[:2]
-    max_dim = 256.0
+    max_dim = 400.0 # Increased for better foot detail
     scale = max_dim / max(h, w) if max(h, w) > max_dim else 1.0
     small_image = cv2.resize(image, (int(w * scale), int(h * scale)))
-    small_image = enhance_image(small_image)
     sh, sw = small_image.shape[:2]
     
-    # Get paper boundaries in small image
+    # Get paper boundaries
     small_paper_rect = paper_rect * scale
     x, y, pw, ph = cv2.boundingRect(small_paper_rect.astype(np.int32))
     
-    # Detect edges
-    gray = cv2.cvtColor(small_image, cv2.COLOR_BGR2GRAY)
-    # Try edge-based detection first
-    edged = cv2.Canny(cv2.GaussianBlur(gray, (5, 5), 0), 30, 100)
-    dilated = cv2.dilate(edged, np.ones((5, 5), np.uint8), iterations=2)
+    # ROI for foot: Tight vertical range (5% margin) to cut off the leg
+    roi_w = int(sw * 0.6)
+    margin_v = int(ph * 0.05)
+    sy1 = max(0, y - margin_v)
+    sy2 = min(sh - 1, y + ph + margin_v)
     
-    # ROI for foot - make it more flexible (75% of screen width)
-    roi_w = int(sw * 0.75)
     if foot_side == "left":
-        sx1, sx2 = max(0, x - roi_w), max(0, x - 2)
+        sx1, sx2 = max(0, x - roi_w), max(0, x - 5)
     else:
-        sx1, sx2 = min(sw - 1, (x + pw) + 2), min(sw - 1, (x + pw) + roi_w)
+        sx1, sx2 = min(sw - 1, (x + pw) + 5), min(sw - 1, (x + pw) + roi_w)
         
-    roi_mask = np.zeros(gray.shape, dtype=np.uint8)
-    cv2.rectangle(roi_mask, (sx1, 0), (sx2, sh), 255, -1)
-    masked = cv2.bitwise_and(dilated, dilated, mask=roi_mask)
-    
-    contours, _ = cv2.findContours(masked, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    
-    # Fallback: If edge detection failed, try Otsu thresholding in the ROI
-    if not contours or cv2.contourArea(max(contours, key=cv2.contourArea)) < 300:
-        roi_gray = gray[:, sx1:sx2]
-        _, thresh = cv2.threshold(roi_gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-        # Re-apply mask to the whole image
-        full_thresh = np.zeros_like(gray)
-        full_thresh[:, sx1:sx2] = thresh
-        contours, _ = cv2.findContours(full_thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    roi = small_image[sy1:sy2, sx1:sx2]
+    if roi.size == 0:
+        raise CVError("Foot ROI empty. Ensure your foot is next to the paper.")
 
+    # Process ROI
+    gray_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+    blurred = cv2.GaussianBlur(gray_roi, (5, 5), 0)
+    
+    # Method 1: Adaptive Thresholding (good for skin vs floor)
+    thresh = cv2.adaptiveThreshold(blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+                                   cv2.THRESH_BINARY_INV, 11, 2)
+    
+    # Method 2: Canny Edges
+    edged = cv2.Canny(blurred, 30, 100)
+    kernel = np.ones((3, 3), np.uint8)
+    dilated = cv2.dilate(edged, kernel, iterations=1)
+    
+    # Combine methods
+    combined = cv2.bitwise_or(thresh, dilated)
+    combined = cv2.morphologyEx(combined, cv2.MORPH_CLOSE, kernel)
+    
+    contours, _ = cv2.findContours(combined, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
     if not contours:
-        raise CVError("Foot not detected next to paper. Ensure your foot is fully visible.")
+        raise CVError("Foot not detected. Ensure your foot is fully visible and not in deep shadow.")
         
+    # Pick the largest contour that isn't the entire ROI border
     foot_contour = max(contours, key=cv2.contourArea)
-    if cv2.contourArea(foot_contour) < 300: # Lowered from 500
-        raise CVError("Foot shape too small. Ensure you're not too far away.")
+    if cv2.contourArea(foot_contour) < (roi.size * 0.05):
+        raise CVError("Foot shape too small. Move closer.")
         
-    # Create filled mask and re-extract clean contour
-    m = np.zeros(gray.shape, dtype=np.uint8)
-    cv2.drawContours(m, [foot_contour], -1, 255, -1)
-    refined_c, _ = cv2.findContours(m, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    foot_contour = max(refined_c, key=cv2.contourArea)
+    # Offset contour back to small_image coordinates
+    foot_contour[:, :, 0] += sx1
+    foot_contour[:, :, 1] += sy1
     
     return (foot_contour / scale).astype(np.int32)
 
@@ -181,41 +216,22 @@ def measure_foot(foot_contour, M):
     length_cm = l_raw * 0.85
     width_cm = w_raw * 0.85
     
-    # Aspect Ratio Validation: Length vs Width
-    # Human feet are typically 2.3x to 3.0x as long as they are wide.
-    if width_cm > 0:
-        ratio = length_cm / width_cm
-        if ratio < 2.0 or ratio > 3.8:
-            logger.warning(f"Impossible foot shape rejected: ratio {ratio:.2f}")
-            raise CVError("Detection error. Please ensure your foot is fully visible and not skewed.")
-
-    # Sanity check: Adult feet are rarely > 34cm or < 14cm
-    if length_cm > 34.0 or length_cm < 14.0:
-        logger.warning(f"Extreme measurement rejected: {length_cm}cm")
-        raise CVError("Measurement failed. Ensure your foot is correctly placed next to the paper.")
-        
+    # SANITY CHECKS REMOVED AS REQUESTED BY USER
+    # We now return the measurement even if it looks 'impossible'
     return length_cm, width_cm
 
 def calculate_shoe_size(length_cm: float):
     """
     Industry Standard Foot-to-Shoe Size Conversion.
-    Based on standard brand charts (Nike, Adidas, etc.)
     """
-    # Standard formula for UK/India sizing matching Nike/Adidas charts:
-    # 26.2cm -> UK 7.5, 27.1cm -> UK 8.5, 28cm -> UK 9.5
+    # Standard formula for UK/India sizing
     uk_raw = (length_cm - 19.8) / 0.846
     uk_size = max(1, int(round(uk_raw)))
     
-    # US Men is typically UK + 1
     us_men = uk_size + 1
-    
-    # EU Size formula: (Length_cm + 1.5) * 1.5
     eu_size = int(round(1.5 * (length_cm + 1.5)))
     
-    # Final capping for realistic adult sizes
-    uk_size = min(max(uk_size, 1), 14)
-    us_men = min(max(us_men, 2), 15)
-    
+    # Capping removed
     return uk_size, us_men, eu_size
 
 def process_image(image: np.ndarray, foot_side: str) -> dict:
@@ -248,15 +264,11 @@ def fast_validate_image(image: np.ndarray, foot_side: str) -> dict:
     """Lite version for real-time camera feedback."""
     try:
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        is_blurry = cv2.Laplacian(gray, cv2.CV_64F).var() < 7.0
-        if is_blurry:
-            return {
-                "a4_detected": False, "foot_detected": False, "is_blurry": True,
-                "tilt_ok": True, "valid": False, "confidence": 0.0,
-                "message": "Too blurry"
-            }
+        # BLUR CHECK REMOVED AS REQUESTED
+        # is_blurry = cv2.Laplacian(gray, cv2.CV_64F).var() < 7.0
             
         rect, mw, mh = detect_a4_paper(image)
+        # Note: In fast validation, we primarily check for A4 as a proxy for a good setup.
         return {
             "a4_detected": True, "foot_detected": True, "is_blurry": False,
             "tilt_ok": True, "valid": True, "confidence": 0.9,
@@ -268,9 +280,10 @@ def fast_validate_image(image: np.ndarray, foot_side: str) -> dict:
             "tilt_ok": True, "valid": False, "confidence": 0.0,
             "message": str(e)
         }
-    except Exception:
+    except Exception as e:
+        logger.error(f"Unexpected validation error: {str(e)}")
         return {
             "a4_detected": False, "foot_detected": False, "is_blurry": False,
             "tilt_ok": True, "valid": False, "confidence": 0.0,
-            "message": "A4 Paper not detected"
+            "message": f"Detection error: {str(e)}"
         }

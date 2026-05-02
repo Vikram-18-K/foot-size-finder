@@ -273,7 +273,10 @@
                     </div>
 
                     <div class="control-card instructions-card">
-                        <h3 class="control-title">How to Scan</h3>
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+                            <h3 class="control-title" style="margin-bottom:0;">How to Scan</h3>
+                            <button id="openGuideBtn" style="background:none; border:none; color:var(--cyan); font-size:12px; font-weight:700; cursor:pointer; text-decoration:underline;">Detailed Guide →</button>
+                        </div>
                         <ol class="scan-steps">
                             <li><span>1</span> Remove your shoe and sock</li>
                             <li><span>2</span> Place A4 paper flat on the floor</li>
@@ -357,7 +360,52 @@
     </div>
 </div>
 
-<script src="config.js"></script>
-<script src="script.js"></script>
+        <!-- ======= INSTRUCTION MODAL ======= -->
+    <div class="modal-overlay" id="guideModal">
+        <div class="modal-content">
+            <button class="modal-close" id="closeGuideBtn">&times;</button>
+            <h2 class="modal-title">Precision Scan Guide</h2>
+            
+            <div class="guide-scroll">
+                <img src="foot_scan_instructions_diagram_1777708338653.png" class="guide-image" alt="Scanning Diagram">
+                
+                <div class="guide-steps">
+                    <div class="guide-step">
+                        <div class="guide-step-num">1</div>
+                        <div>
+                            <strong>A4 Paper Placement</strong>
+                            <p>Place a standard white A4 paper on a hard, dark, or colored floor. Avoid white tiles or very reflective floors.</p>
+                        </div>
+                    </div>
+                    <div class="guide-step">
+                        <div class="guide-step-num">2</div>
+                        <div>
+                            <strong>Foot Position</strong>
+                            <p>Remove shoes and socks. Place your foot right next to the long edge of the paper. Keep your heel level with the bottom edge of the paper.</p>
+                        </div>
+                    </div>
+                    <div class="guide-step">
+                        <div class="guide-step-num">3</div>
+                        <div>
+                            <strong>Camera Angle</strong>
+                            <p>Hold your phone directly above the paper. Try to keep it parallel to the floor (90° angle) for the most accurate 3D calculation.</p>
+                        </div>
+                    </div>
+                    <div class="guide-step">
+                        <div class="guide-step-num">4</div>
+                        <div>
+                            <strong>Visibility</strong>
+                            <p>Ensure both the paper and your entire foot (toes to heel) are inside the camera frame. The cyan brackets should wrap around the paper.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <button class="cta-btn" id="gotItBtn" style="width:100%; margin-top:20px;">I UNDERSTAND, START SCAN</button>
+        </div>
+    </div>
+
+    <script src="config.js"></script>
+    <script src="script.js"></script>
 </body>
 </html>
