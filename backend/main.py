@@ -32,8 +32,9 @@ class MeasurementResponse(BaseModel):
     success: bool
     length_cm: float
     width_cm: float
-    shoe_size_uk: float
-    shoe_size_us: float
+    shoe_size_uk: int
+    shoe_size_us: int
+    shoe_size_eu: int
     message: str
 
 class ValidationResponse(BaseModel):
@@ -96,6 +97,7 @@ async def measure_foot(request: MeasurementRequest):
             width_cm=results["width_cm"],
             shoe_size_uk=results["shoe_size_uk"],
             shoe_size_us=results["shoe_size_us"],
+            shoe_size_eu=results["shoe_size_eu"],
             message="Measurement successful"
         )
         
@@ -107,6 +109,7 @@ async def measure_foot(request: MeasurementRequest):
             width_cm=0.0,
             shoe_size_uk=0.0,
             shoe_size_us=0.0,
+            shoe_size_eu=0.0,
             message=str(cv_err)
         )
     except ValueError as val_e:
@@ -117,6 +120,7 @@ async def measure_foot(request: MeasurementRequest):
             width_cm=0.0,
             shoe_size_uk=0.0,
             shoe_size_us=0.0,
+            shoe_size_eu=0.0,
             message=str(val_e)
         )
     except Exception as e:

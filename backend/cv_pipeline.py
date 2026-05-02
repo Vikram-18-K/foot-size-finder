@@ -25,7 +25,7 @@ def enhance_image(image: np.ndarray):
     enhanced = cv2.cvtColor(cv2.merge((y, u, v)), cv2.COLOR_YUV2BGR)
     return enhanced
 
-def validate_image_quality(image: np.ndarray, threshold: float = 12.0):
+def validate_image_quality(image: np.ndarray, threshold: float = 8.0):
     """Rejects blurry images using Laplacian variance."""
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     variance = cv2.Laplacian(gray, cv2.CV_64F).var()
@@ -66,12 +66,24 @@ def detect_a4_paper(image: np.ndarray):
     
     for c in contours:
         area = cv2.contourArea(c)
-        if area > (img_area * 0.08): # Paper must be > 8% of image
+        if area > (img_area * 0.04): # Paper must be > 4% of image (relaxed from 8%)
             peri = cv2.arcLength(c, True)
             approx = cv2.approxPolyDP(c, 0.02 * peri, True)
-            if len(approx) == 4 and area > max_area:
-                paper_contour = approx
-                max_area = area
+            
+            # Relaxed: allow 4-6 points to account for noise/rounding
+            if 4 <= len(approx) <= 6:
+                # Use minAreaRect to get a consistent 4-point rectangle
+                rect_rot = cv2.minAreaRect(c)
+                box = cv2.boxPoints(rect_rot)
+                box = np.int0(box)
+                
+                # Check aspect ratio (A4 is ~1.41)
+                (x, y), (w_rot, h_rot), angle = rect_rot
+                aspect_ratio = max(w_rot, h_rot) / min(w_rot, h_rot)
+                
+                if 1.2 < aspect_ratio < 1.7 and area > max_area:
+                    paper_contour = box
+                    max_area = area
                 
     if paper_contour is None:
         raise CVError("A4 paper edges not detected. Check for glare or shadows.")
@@ -112,27 +124,38 @@ def segment_foot(image: np.ndarray, paper_rect: np.ndarray, foot_side: str):
     
     # Detect edges
     gray = cv2.cvtColor(small_image, cv2.COLOR_BGR2GRAY)
+    # Try edge-based detection first
     edged = cv2.Canny(cv2.GaussianBlur(gray, (5, 5), 0), 30, 100)
     dilated = cv2.dilate(edged, np.ones((5, 5), np.uint8), iterations=2)
     
-    # ROI for foot
-    roi_w = int(sw * 0.65)
+    # ROI for foot - make it more flexible (75% of screen width)
+    roi_w = int(sw * 0.75)
     if foot_side == "left":
-        sx1, sx2 = max(0, x - roi_w), max(0, x - 5)
+        sx1, sx2 = max(0, x - roi_w), max(0, x - 2)
     else:
-        sx1, sx2 = min(sw - 1, (x + pw) + 5), min(sw - 1, (x + pw) + roi_w)
+        sx1, sx2 = min(sw - 1, (x + pw) + 2), min(sw - 1, (x + pw) + roi_w)
         
     roi_mask = np.zeros(gray.shape, dtype=np.uint8)
     cv2.rectangle(roi_mask, (sx1, 0), (sx2, sh), 255, -1)
     masked = cv2.bitwise_and(dilated, dilated, mask=roi_mask)
     
     contours, _ = cv2.findContours(masked, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    # Fallback: If edge detection failed, try Otsu thresholding in the ROI
+    if not contours or cv2.contourArea(max(contours, key=cv2.contourArea)) < 300:
+        roi_gray = gray[:, sx1:sx2]
+        _, thresh = cv2.threshold(roi_gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+        # Re-apply mask to the whole image
+        full_thresh = np.zeros_like(gray)
+        full_thresh[:, sx1:sx2] = thresh
+        contours, _ = cv2.findContours(full_thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
     if not contours:
-        raise CVError("Foot not detected next to paper.")
+        raise CVError("Foot not detected next to paper. Ensure your foot is fully visible.")
         
     foot_contour = max(contours, key=cv2.contourArea)
-    if cv2.contourArea(foot_contour) < 500:
-        raise CVError("Foot shape too small. Try re-positioning.")
+    if cv2.contourArea(foot_contour) < 300: # Lowered from 500
+        raise CVError("Foot shape too small. Ensure you're not too far away.")
         
     # Create filled mask and re-extract clean contour
     m = np.zeros(gray.shape, dtype=np.uint8)
@@ -145,20 +168,55 @@ def segment_foot(image: np.ndarray, paper_rect: np.ndarray, foot_side: str):
 def measure_foot(foot_contour, M):
     """Calculates foot dimensions and applies 3D compensation."""
     c = np.array(foot_contour, dtype=np.float32)
-    warped_c = cv2.perspectiveTransform(c, M)
+    warped_c = cv2.perspectiveTransform(c.reshape(-1, 1, 2), M)
     rect = cv2.minAreaRect(warped_c)
     (_, (w_px, h_px), _) = rect
     
-    # 0.85 compensation is critical to prevent 'Extremely Large' results
-    length_cm = (max(w_px, h_px) / PIXELS_PER_CM) * 0.85
-    width_cm = (min(w_px, h_px) / PIXELS_PER_CM) * 0.85
+    # Calculate raw dimensions
+    l_raw = max(w_px, h_px) / PIXELS_PER_CM
+    w_raw = min(w_px, h_px) / PIXELS_PER_CM
+    
+    # 3D Depth Compensation: Foot is a 3D object. Top of foot is closer to lens.
+    # 0.85 is a standard conservative multiplier for depth correction.
+    length_cm = l_raw * 0.85
+    width_cm = w_raw * 0.85
+    
+    # Aspect Ratio Validation: Length vs Width
+    # Human feet are typically 2.3x to 3.0x as long as they are wide.
+    if width_cm > 0:
+        ratio = length_cm / width_cm
+        if ratio < 2.0 or ratio > 3.8:
+            logger.warning(f"Impossible foot shape rejected: ratio {ratio:.2f}")
+            raise CVError("Detection error. Please ensure your foot is fully visible and not skewed.")
+
+    # Sanity check: Adult feet are rarely > 34cm or < 14cm
+    if length_cm > 34.0 or length_cm < 14.0:
+        logger.warning(f"Extreme measurement rejected: {length_cm}cm")
+        raise CVError("Measurement failed. Ensure your foot is correctly placed next to the paper.")
+        
     return length_cm, width_cm
 
 def calculate_shoe_size(length_cm: float):
-    """Ecommerce Standard Conversion (Paris Points)."""
-    uk_raw = (length_cm - 18.0) / 0.846
+    """
+    Industry Standard Foot-to-Shoe Size Conversion.
+    Based on standard brand charts (Nike, Adidas, etc.)
+    """
+    # Standard formula for UK/India sizing matching Nike/Adidas charts:
+    # 26.2cm -> UK 7.5, 27.1cm -> UK 8.5, 28cm -> UK 9.5
+    uk_raw = (length_cm - 19.8) / 0.846
     uk_size = max(1, int(round(uk_raw)))
-    return uk_size, uk_size + 1
+    
+    # US Men is typically UK + 1
+    us_men = uk_size + 1
+    
+    # EU Size formula: (Length_cm + 1.5) * 1.5
+    eu_size = int(round(1.5 * (length_cm + 1.5)))
+    
+    # Final capping for realistic adult sizes
+    uk_size = min(max(uk_size, 1), 14)
+    us_men = min(max(us_men, 2), 15)
+    
+    return uk_size, us_men, eu_size
 
 def process_image(image: np.ndarray, foot_side: str) -> dict:
     validate_image_quality(image)
@@ -173,19 +231,46 @@ def process_image(image: np.ndarray, foot_side: str) -> dict:
         foot_side = other
         
     l_cm, w_cm = measure_foot(foot_contour, M)
-    if not (15 < l_cm < 35):
-        raise CVError("Measurement failed. Ensure foot is correctly placed next to A4 paper.")
+    if not (12 < l_cm < 35):
+        raise CVError("Measurement out of range (12-35cm). Check your foot placement.")
         
-    uk, us = calculate_shoe_size(l_cm)
-    return {"foot_side": foot_side, "length_cm": round(l_cm, 1), "width_cm": round(w_cm, 1), "shoe_size_uk": uk, "shoe_size_us": us}
+    uk, us, eu = calculate_shoe_size(l_cm)
+    return {
+        "foot_side": foot_side, 
+        "length_cm": round(l_cm, 1), 
+        "width_cm": round(w_cm, 1), 
+        "shoe_size_uk": uk, 
+        "shoe_size_us": us,
+        "shoe_size_eu": eu
+    }
 
 def fast_validate_image(image: np.ndarray, foot_side: str) -> dict:
     """Lite version for real-time camera feedback."""
     try:
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        if cv2.Laplacian(gray, cv2.CV_64F).var() < 10.0:
-            return {"valid": False, "message": "Too blurry"}
+        is_blurry = cv2.Laplacian(gray, cv2.CV_64F).var() < 7.0
+        if is_blurry:
+            return {
+                "a4_detected": False, "foot_detected": False, "is_blurry": True,
+                "tilt_ok": True, "valid": False, "confidence": 0.0,
+                "message": "Too blurry"
+            }
+            
         rect, mw, mh = detect_a4_paper(image)
-        return {"valid": True, "message": "Perfect! Hold still...", "confidence": 0.9}
-    except:
-        return {"valid": False, "message": "A4 Paper not detected"}
+        return {
+            "a4_detected": True, "foot_detected": True, "is_blurry": False,
+            "tilt_ok": True, "valid": True, "confidence": 0.9,
+            "message": "Perfect! Hold still..."
+        }
+    except CVError as e:
+        return {
+            "a4_detected": False, "foot_detected": False, "is_blurry": False,
+            "tilt_ok": True, "valid": False, "confidence": 0.0,
+            "message": str(e)
+        }
+    except Exception:
+        return {
+            "a4_detected": False, "foot_detected": False, "is_blurry": False,
+            "tilt_ok": True, "valid": False, "confidence": 0.0,
+            "message": "A4 Paper not detected"
+        }

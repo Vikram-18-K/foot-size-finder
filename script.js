@@ -637,7 +637,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if(res.ok && data.length_cm) {
                     const uk  = data.shoe_size_uk;
                     const us  = data.shoe_size_us;
-                    const eu  = Math.round(data.length_cm*1.5+2);
+                    const eu  = data.shoe_size_eu;
                     const ind = uk;
                     const result = {foot:currentFoot, length_cm:data.length_cm, width_cm:data.width_cm, uk, us, eu, ind};
                     lastRawResult = result; // Store for fit toggling
@@ -699,9 +699,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (currentFit === 'loose') adj = 1;
         if (currentFit === 'tight') adj = -1;
 
-        const adjUK = Math.max(1, r.uk + adj);
-        const adjUS = Math.max(1, r.us + adj);
-        const adjEU = Math.max(30, r.eu + (adj * 1.5)); // EU sizes are larger increments
+        const adjUK = Math.round(Math.max(1, r.uk + adj));
+        const adjUS = Math.round(Math.max(1, r.us + adj));
+        const adjEU = Math.round(Math.max(30, r.eu + (adj * 1.5)));
 
         el.innerHTML = `
             <div class="qr-size">${adjUK}</div>
